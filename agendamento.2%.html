@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento VIP | Beauty Studio</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { 
+            --primary: #d4af37; 
+            --bg-overlay: rgba(0, 0, 0, 0.9);
+            --card-bg: #121212; 
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body { 
+            background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay)), 
+                              url('https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=1470');
+            background-size: cover; background-position: center; background-attachment: fixed;
+            color: #fff; font-family: 'Inter', sans-serif; 
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 20px;
+        }
+
+        .container { 
+            width: 100%; max-width: 440px; background: var(--card-bg); 
+            padding: 35px; border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.05); 
+            text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+        }
+
+        h1 { font-family: 'Great Vibes', cursive; font-size: 3.8rem; color: #fff; margin-bottom: 5px; }
+        .tagline { font-size: 0.6rem; letter-spacing: 4px; color: var(--primary); text-transform: uppercase; margin-bottom: 25px; display: block; }
+
+        .input-group { text-align: left; margin-bottom: 15px; }
+        label { display: block; font-size: 0.65rem; color: #666; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; letter-spacing: 1px; }
+        
+        input, select { 
+            width: 100%; padding: 12px 15px; background: #1a1a1a; border: 1px solid #333; 
+            color: #fff; border-radius: 10px; outline: none; font-size: 0.9rem; transition: 0.3s;
+        }
+
+        input:focus, select:focus { border-color: var(--primary); }
+
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        .slots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .slot { 
+            padding: 10px; background: #222; border-radius: 8px; cursor: pointer; 
+            font-size: 0.8rem; border: 1px solid transparent; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .slot.disabled { background: #080808; color: #333; cursor: not-allowed; text-decoration: line-through; }
+        .slot.selected { border-color: var(--primary); background: rgba(212, 175, 55, 0.15); color: var(--primary); font-weight: bold; }
+
+        .btn-confirm { 
+            width: 100%; padding: 18px; background: var(--primary); color: #000; 
+            border: none; border-radius: 12px; font-weight: 800; margin-top: 25px; 
+            cursor: pointer; text-transform: uppercase; letter-spacing: 1.5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Beauty</h1>
+    <span class="tagline">Barbearia & Estética</span>
+    
+    <form id="bookingForm">
+        <div class="input-group">
+            <label>Nome Completo</label>
+            <input type="text" id="custName" placeholder="Ex: Daniel Brandão" required>
+        </div>
+
+        <div class="input-group">
+            <label>WhatsApp</label>
+            <input type="tel" id="custPhone" placeholder="(47) 99999-9999" required>
+        </div>
+
+        <div class="row">
+            <div class="input-group">
+                <label>Barbeiro</label>
+                <select id="barberName" required>
+                    <option value="">Selecione...</option>
+                    <option value="Cadu">Cadu</option>
+                    <option value="Felipe">Felipe</option>
+                    <option value="Junior">Junior</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Serviço</label>
+                <select id="serviceType" required>
+                    <option value="">Selecione...</option>
+                    <option value="Corte">Corte (R$ 35)</option>
+                    <option value="Barba">Barba (R$ 25)</option>
+                    <option value="Corte e Barba">Combo (R$ 55)</option>
+                    <option value="Sobrancelha">Sobrancelha (R$ 10)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Data</label>
+            <input type="date" id="dataAgenda" onchange="carregarHorariosDoBanco()" required>
+        </div>
+        
+        <div class="input-group">
+            <label>Horários para hoje</label>
+            <div class="slots-grid" id="gridHorarios">
+                </div>
+        </div>
+
+        <button type="submit" class="btn-confirm">Reservar Horário</button>
+    </form>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://tgtqrhjutligkgthcrvq.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_LKBQ9OjGQ3JazqKKaM0MYw_dL1lKIYr'; 
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const horariosLista = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+    let horaSelecionada = null;
+
+    async function carregarHorariosDoBanco() {
+        const dataStr = document.getElementById('dataAgenda').value;
+        const grid = document.getElementById('gridHorarios');
+        grid.innerHTML = "";
+        if (!dataStr) return;
+
+        const { data: ocupados } = await _supabase
+            .from('agendamentos')
+            .select('hora')
+            .eq('data', dataStr);
+
+        const horasOcupadas = ocupados ? ocupados.map(o => o.hora) : [];
+
+        horariosLista.forEach(hora => {
+            const div = document.createElement('div');
+            div.innerText = hora;
+            div.className = 'slot';
+            
+            if (horasOcupadas.includes(hora)) {
+                div.classList.add('disabled');
+            } else {
+                div.onclick = () => {
+                    horaSelecionada = hora;
+                    document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+                    div.classList.add('selected');
+                };
+            }
+            grid.appendChild(div);
+        });
+    }
+
+    document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById('custName').value;
+        const fone = document.getElementById('custPhone').value;
+        const data = document.getElementById('dataAgenda').value;
+        const barbeiro = document.getElementById('barberName').value;
+        const servico = document.getElementById('serviceType').value;
+
+        if (!horaSelecionada) return alert("Selecione um horário!");
+
+        // Inserindo com os novos campos (Barbeiro e Serviço)
+        const { error } = await _supabase.from('agendamentos').insert([
+            { 
+                data, 
+                hora: horaSelecionada, 
+                nome_cliente: nome, 
+                telefone_cliente: fone,
+                barbeiro: barbeiro, // Novo campo
+                servico: servico    // Novo campo
+            }
+        ]);
+
+        if (!error) {
+            alert("Agendamento Confirmado!");
+            const msg = `*Novo Agendamento!*%0A*Cliente:* ${nome}%0A*Barbeiro:* ${barbeiro}%0A*Serviço:* ${servico}%0A*Data:* ${data}%0A*Hora:* ${horaSelecionada}`;
+            window.open(`https://wa.me/5547999999999?text=${msg}`, '_blank');
+            location.reload();
+        } else {
+            alert("Erro ao agendar. Tente novamente.");
+        }
+    });
+</script>
+</body>
+</html>
