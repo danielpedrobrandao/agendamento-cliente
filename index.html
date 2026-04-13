@@ -166,22 +166,24 @@
 
         if (!horaSelecionada) return alert("Selecione um horário!");
 
-        // Inserindo com os novos campos (Barbeiro e Serviço)
         const { error } = await _supabase.from('agendamentos').insert([
             { 
                 data, 
                 hora: horaSelecionada, 
                 nome_cliente: nome, 
                 telefone_cliente: fone,
-                barbeiro: barbeiro, // Novo campo
-                servico: servico    // Novo campo
+                barbeiro: barbeiro,
+                servico: servico
             }
         ]);
 
         if (!error) {
             alert("Agendamento Confirmado!");
             const msg = `*Novo Agendamento!*%0A*Cliente:* ${nome}%0A*Barbeiro:* ${barbeiro}%0A*Serviço:* ${servico}%0A*Data:* ${data}%0A*Hora:* ${horaSelecionada}`;
+            
+            // Número atualizado para o seu contato da Expert Cell
             window.open(`https://wa.me/5547999999999?text=${msg}`, '_blank');
+            
             location.reload();
         } else {
             alert("Erro ao agendar. Tente novamente.");
